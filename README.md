@@ -2,6 +2,8 @@
 
 A FastAPI-based web application that provides real-time audio transcription using OpenAI's Whisper model. This application allows users to upload audio files and receive streaming transcriptions as they are processed.
 
+![](images/screenshot.png)
+
 ## Features
 
 - Upload audio files for transcription
