@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   python3-pip \
   awscli \
   zip \
+  ffmpeg \
   unzip
 
 ADD https://astral.sh/uv/install.sh /uv-installer.sh
