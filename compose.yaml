@@ -15,7 +15,7 @@ services:
       - "4566:4566"  # LocalStack Edge Port
       - "4571:4571"  # LocalStack Edge Port (HTTPS)
     environment:
-      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_DEFAULT_REGION=eu-west-1
       - EDGE_PORT=4566
       - SERVICES=s3,sqs,redis
     volumes:

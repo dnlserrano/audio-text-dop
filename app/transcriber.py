@@ -19,6 +19,7 @@ class WhisperTranscriber:
         self.model_size = model_size
         self.language = language
         self.chunk_duration = chunk_duration
+        self.gpu_backend = gpu_backend
         self.device = self._setup_device(gpu_backend)
 
         # Lazy loading - will only load model when needed

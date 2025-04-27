@@ -4,6 +4,7 @@ from fastapi import FastAPI, File, UploadFile, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 import json
 import os
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -29,9 +30,7 @@ templates = Jinja2Templates(directory=str(Path(BASE_DIR) / "app" / "templates"))
 # Mount static files
 app.mount("/static", StaticFiles(directory=str(Path(BASE_DIR) / "static")), name="static")
 
-# Create temp directory if it doesn't exist
-TEMP_DIR = Path(BASE_DIR) / "temp"
-TEMP_DIR.mkdir(exist_ok=True)
+TEMP_DIR = Path(tempfile.gettempdir())
 
 # Redis configuration
 REDIS_HOST = os.getenv("REDIS_HOST", "redis")  # Use "redis" to resolve the redis service name
