@@ -8,3 +8,20 @@ services:
     volumes:
       - .:/home/app
       - ${HOME}/.aws:/home/app/.aws
+
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"  # LocalStack Edge Port
+      - "4571:4571"  # LocalStack Edge Port (HTTPS)
+    environment:
+      - AWS_DEFAULT_REGION=us-east-1
+      - EDGE_PORT=4566
+      - SERVICES=s3,sqs,redis
+    volumes:
+      - "${TMPDIR:-/tmp}/localstack:/var/lib/localstack"
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
