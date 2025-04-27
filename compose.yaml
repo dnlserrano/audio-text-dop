@@ -19,7 +19,7 @@ services:
       - EDGE_PORT=4566
       - SERVICES=s3,sqs,redis
     volumes:
-      - "${TMPDIR:-/tmp}/localstack:/var/lib/localstack"
+      - "./tmp/localstack:/var/lib/localstack"
 
   redis:
     image: redis:latest
