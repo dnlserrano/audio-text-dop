@@ -16,4 +16,5 @@ dependencies = [
     "transformers>=4.51.3",
     "uvicorn>=0.34.2",
     "redis>=5.2",
+    "ipdb>=0.13.13",
 ]
