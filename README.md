@@ -35,9 +35,14 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 ```
 
-3. Install the required packages:
+4. Install uv:
 ```bash
-pip install -r requirements.txt
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+5. Synchronize the virtual environment with the requirements:
+```bash
+uv sync
 ```
 
 4. Make sure FFmpeg is installed:

@@ -1,0 +1,10 @@
+version: "3.9"
+services:
+  web:
+    build: .
+    command: tail -f /dev/null
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/home/app
+      - ${HOME}/.aws:/home/app/.aws
