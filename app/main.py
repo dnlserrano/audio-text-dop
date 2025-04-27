@@ -2,9 +2,16 @@ import os
 import uuid
 from fastapi import FastAPI, File, UploadFile, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
-from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
+import json
+import os
+import uuid
 from pathlib import Path
+
+import redis
+from fastapi import FastAPI, File, UploadFile, Request
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 from app.transcriber import WhisperTranscriber
 
@@ -26,8 +33,14 @@ app.mount("/static", StaticFiles(directory=str(Path(BASE_DIR) / "static")), name
 TEMP_DIR = Path(BASE_DIR) / "temp"
 TEMP_DIR.mkdir(exist_ok=True)
 
-# Maintain a dictionary of active transcription jobs
-active_jobs = {}
+# Redis configuration
+REDIS_HOST = os.getenv("REDIS_HOST", "redis")  # Use "redis" to resolve the redis service name
+REDIS_PORT = int(os.getenv("REDIS_PORT", "6379"))
+REDIS_DB = int(os.getenv("REDIS_DB", "0"))
+
+# Create a Redis client
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB)
+
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
@@ -67,30 +80,47 @@ async def upload_file(
         chunk_duration=chunk_duration
     )
 
-    # Store the job details
-    active_jobs[job_id] = {
+    # Store the job details in Redis
+    job_data = {
         "file_path": str(temp_file_path),
-        "transcriber": transcriber,
+        "transcriber": {
+            "model_size": transcriber.model_size,
+            "language": transcriber.language,
+            "gpu_backend": transcriber.gpu_backend,
+            "chunk_duration": transcriber.chunk_duration
+        },
         "status": "ready"
     }
+    redis_client.set(job_id, json.dumps(job_data))
 
     return {"job_id": job_id, "filename": file.filename, "status": "ready"}
 
+
 async def generate_stream(job_id: str):
     """Generator function that yields transcription results as they come in"""
-    if job_id not in active_jobs:
+    job_data_str = redis_client.get(job_id)
+    if not job_data_str:
         yield "Event: error\nData: Job not found\n\n"
         return
 
-    job = active_jobs[job_id]
-    job["status"] = "processing"
+    job_data = json.loads(job_data_str)
+    job_data["status"] = "processing"
+    redis_client.set(job_id, json.dumps(job_data))
+
+    # Re-create the transcriber instance
+    transcriber = WhisperTranscriber(
+        model_size=job_data["transcriber"]["model_size"],
+        language=job_data["transcriber"]["language"],
+        gpu_backend=job_data["transcriber"]["gpu_backend"],
+        chunk_duration=job_data["transcriber"]["chunk_duration"]
+    )
 
     try:
         # Send initial message
         yield "event: start\ndata: Transcription started\n\n"
 
         # Stream transcription results
-        async for paragraph in job["transcriber"].transcribe_stream(job["file_path"]):
+        async for paragraph in transcriber.transcribe_stream(job_data["file_path"]):
             # Format for server-sent events
             yield f"event: transcription\ndata: {paragraph}\n\n"
 
@@ -98,21 +128,26 @@ async def generate_stream(job_id: str):
         yield "event: complete\ndata: Transcription completed\n\n"
 
         # Update job status
-        job["status"] = "completed"
+        job_data["status"] = "completed"
+        redis_client.set(job_id, json.dumps(job_data))
+
     except Exception as e:
         # Handle errors
         error_message = str(e)
         yield f"event: error\ndata: {error_message}\n\n"
-        job["status"] = "error"
+        job_data["status"] = "error"
+        redis_client.set(job_id, json.dumps(job_data))
     finally:
         # Clean up the temporary file
-        if os.path.exists(job["file_path"]):
-            os.remove(job["file_path"])
+        if os.path.exists(job_data["file_path"]):
+            os.remove(job_data["file_path"])
+
 
 @app.get("/stream/{job_id}")
 async def stream_results(job_id: str):
     """Stream transcription results using server-sent events"""
-    if job_id not in active_jobs:
+    job_data_str = redis_client.get(job_id)
+    if not job_data_str:
         return {"error": "Job not found"}
 
     return StreamingResponse(
@@ -120,36 +155,49 @@ async def stream_results(job_id: str):
         media_type="text/event-stream"
     )
 
+
 @app.get("/status/{job_id}")
 async def job_status(job_id: str):
     """Get the status of a transcription job"""
-    if job_id not in active_jobs:
+    job_data_str = redis_client.get(job_id)
+    if not job_data_str:
         return {"error": "Job not found"}
 
+    job_data = json.loads(job_data_str)
     return {
         "job_id": job_id,
-        "status": active_jobs[job_id]["status"]
+        "status": job_data["status"]
     }
+
 
 @app.delete("/jobs/{job_id}")
 async def delete_job(job_id: str):
     """Delete a job and clean up resources"""
-    if job_id not in active_jobs:
+    job_data_str = redis_client.get(job_id)
+    if not job_data_str:
         return {"error": "Job not found"}
 
+    job_data = json.loads(job_data_str)
+
     # Clean up the temporary file if it exists
-    file_path = active_jobs[job_id]["file_path"]
+    file_path = job_data["file_path"]
     if os.path.exists(file_path):
         os.remove(file_path)
 
-    # Remove the job from active jobs
-    del active_jobs[job_id]
+    # Remove the job from Redis
+    redis_client.delete(job_id)
 
     return {"status": "deleted", "job_id": job_id}
+
 
 @app.on_event("shutdown")
 def cleanup():
     """Clean up temporary files when shutting down"""
-    for job_id, job in active_jobs.items():
-        if os.path.exists(job["file_path"]):
-            os.remove(job["file_path"])
+    # Iterate through all job keys in Redis
+    for job_id in redis_client.scan_iter():
+        job_data_str = redis_client.get(job_id)
+        if job_data_str:
+            job_data = json.loads(job_data_str)
+            if os.path.exists(job_data["file_path"]):
+                os.remove(job_data["file_path"])
+            redis_client.delete(job_id)
