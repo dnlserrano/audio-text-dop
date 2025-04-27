@@ -61,6 +61,8 @@ async def upload_file(
     Upload an audio file and start transcription process.
     Returns a job ID that can be used to stream results.
     """
+    print(f"Uploading file to transcribe using {model_size} {language} {gpu_backend} {chunk_duration}")
+
     # Save the uploaded file to a temporary location
     temp_file_path = TEMP_DIR / f"{uuid.uuid4()}_{file.filename}"
 
@@ -71,22 +73,14 @@ async def upload_file(
     # Create a job ID
     job_id = str(uuid.uuid4())
 
-    # Create a transcriber instance with user parameters
-    transcriber = WhisperTranscriber(
-        model_size=model_size,
-        language=language,
-        gpu_backend=gpu_backend,
-        chunk_duration=chunk_duration
-    )
-
     # Store the job details in Redis
     job_data = {
         "file_path": str(temp_file_path),
         "transcriber": {
-            "model_size": transcriber.model_size,
-            "language": transcriber.language,
-            "gpu_backend": transcriber.gpu_backend,
-            "chunk_duration": transcriber.chunk_duration
+            "model_size": model_size,
+            "language": language,
+            "gpu_backend": gpu_backend,
+            "chunk_duration": chunk_duration
         },
         "status": "ready"
     }
