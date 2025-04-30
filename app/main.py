@@ -49,13 +49,15 @@ async def home(request: Request):
         {"request": request}
     )
 
+from fastapi import Form, File
+
 @app.post("/upload/")
 async def upload_file(
     file: UploadFile = File(...),
-    model_size: str = "large",
-    language: str = "pt",
-    gpu_backend: str = "auto",
-    chunk_duration: int = 30,
+    model_size: str = Form("large"),
+    language: str = Form("pt"),
+    gpu_backend: str = Form("auto"),
+    chunk_duration: int = Form(30),
 ):
     """
     Upload an audio file and start transcription process.
